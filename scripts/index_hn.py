@@ -1,3 +1,99 @@
+#!/usr/bin/env python3
+"""Build a resumable HN YouTube-video index from Algolia's public HN API.
+
+Historical backfill: python scripts/index_hn.py --mode backfill
+Daily updates:     python scripts/index_hn.py --mode recent --days 4
+No external dependencies. Network access required when running.
+"""
+import argparse
+import datetime as dt
+import json
+import os
+from pathlib import Path
+import re
+import time
+from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA = ROOT / 'data'
+STATE = DATA / 'index_state.json'
+POSTS = DATA / 'posts.json'
+OUTPUT = DATA / 'videos.json'
+API = 'https://hn.algolia.com/api/v1/search_by_date'
+VIDEO_ID = re.compile(r'^[A-Za-z0-9_-]{11}$')
+QUERIES = ['youtube.com', 'youtu.be', 'youtube-nocookie.com']
+CATEGORIES = [
+ ('AI', r'\b(ai|llm|neural|machine learning|deep learning|gpt|transformer)\b'),
+ ('程式設計', r'\b(programming|coding|software|compiler|linux|javascript|python|rust|computer science)\b'),
+ ('創業', r'\b(startup|founder|business|entrepreneur|company)\b'),
+ ('科學', r'\b(physics|math|science|biology|space|astronomy)\b'),
+ ('演講', r'\b(lecture|talk|keynote|interview|presentation)\b'),
+]
+
+def video_id(url):
+    try:
+        u = urlparse(url)
+        host = (u.hostname or '').lower()
+        if host in ('youtu.be', 'www.youtu.be'):
+            value = u.path.strip('/').split('/')[0]
+        elif host in ('youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'):
+            parts = u.path.strip('/').split('/')
+            if parts[0] == 'watch':
+                value = parse_qs(u.query).get('v', [''])[0]
+            elif parts[0] in ('embed', 'shorts', 'live', 'v') and len(parts) > 1:
+                value = parts[1]
+            else:
+                return None
+        else:
+            return None
+        return value if VIDEO_ID.fullmatch(value) else None
+    except (ValueError, TypeError):
+        return None
+
+def category(title):
+    for name, pattern in CATEGORIES:
+        if re.search(pattern, title or '', flags=re.I):
+            return name
+    return '科技'
+
+def read_json(path, default):
+    if not path.exists():
+        return default
+    with path.open(encoding='utf-8') as f:
+        return json.load(f)
+
+def write_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix('.tmp')
+    with temp.open('w', encoding='utf-8') as f:
+        json.dump(value, f, ensure_ascii=False, separators=(',', ':'), sort_keys=True)
+        f.write('\n')
+    os.replace(temp, path)
+
+def request(params, retries=5):
+    url = API + '?' + urlencode(params)
+    for attempt in range(retries):
+        try:
+            with urlopen(Request(url, headers={'User-Agent': 'HNVideoArchive/1.0 (public archive indexer)'}), timeout=30) as response:
+                return json.load(response)
+        except Exception:
+            if attempt == retries - 1:
+                raise
+            time.sleep(min(2 ** attempt * 2, 30))
+
+def intervals(start, end, days):
+    cursor = start
+    while cursor < end:
+        nxt = min(cursor + dt.timedelta(days=days), end)
+        yield cursor, nxt
+        cursor = nxt
+
+def ingest(posts, hit):
+    hn_id = str(hit.get('objectID') or '')
+    vid = video_id(hit.get('url') or '')
+    if not hn_id or not vid:
+        return
     posts[hn_id] = {
         'hn_id': hn_id, 'video_id': vid,
         'title': str(hit.get('title') or '')[:500],
