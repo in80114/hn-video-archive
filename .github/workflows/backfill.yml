@@ -1,21 +1,38 @@
+
 name: Backfill HN history (resumable)
+
 on:
   workflow_dispatch:
   schedule:
-    - cron: '11 3 2 * *'
+    - cron: '11 * * * *'
+
 permissions:
   contents: write
+
+concurrency:
+  group: hn-history-backfill
+  cancel-in-progress: false
+
 jobs:
   backfill:
-    runs-on: ubuntu-latest
-    timeout-minutes: 330
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: python -m unittest discover -s tests
-      - run: python scripts/index_hn.py --mode backfill --max-windows 24
+
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+      - name: Backfill historical data
+        run: python scripts/index_hn.py --mode backfill --max-windows 24
+
       - name: Save progress
         if: success()
         run: |
