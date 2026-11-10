@@ -4,7 +4,7 @@ name: Backfill HN history (resumable)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '11 * * * *'
+    - cron: '11 3 * * *'
 
 permissions:
   contents: write
