@@ -1,3 +1,4 @@
+
 name: Update HN video index
 on:
   workflow_dispatch:
@@ -15,7 +16,10 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s tests
-      - run: python scripts/index_hn.py --mode recent --days 4
+      - name: Update HN video index
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: python scripts/index_hn.py --mode recent --days 4
       - name: Generate SEO video pages and sitemap
         run: python scripts/build_seo.py
       - name: Commit refreshed index
