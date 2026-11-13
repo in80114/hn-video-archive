@@ -33,12 +33,14 @@ jobs:
       - name: Backfill historical data
         run: python scripts/index_hn.py --mode backfill --max-windows 24
 
+      - name: Generate SEO video pages and sitemap
+        run: python scripts/build_seo.py
       - name: Save progress
         if: success()
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/
+          git add data/ video/ sitemap.xml
           if ! git diff --cached --quiet; then
             git commit -m 'Backfill HN historical index'
             git push
