@@ -9,7 +9,7 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[1]
 BASE = 'https://hn-video-archive.vercel.app'
 PAGES = ROOT / 'video'
-LIMIT = 200
+LIMIT = 50000
 VALID_ID = re.compile(r'^[A-Za-z0-9_-]{11}$')
 DATE = re.compile(r'^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))?$')
 
