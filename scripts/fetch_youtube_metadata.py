@@ -18,7 +18,8 @@ CACHE = ROOT / "data/youtube_metadata.json"
 API_URL = "https://www.googleapis.com/youtube/v3/videos"
 VALID_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
-LIMIT = 200
+LIMIT = 50000
+MAX_NEW_LOOKUPS_PER_RUN = 500
 BATCH_SIZE = 50
 
 
@@ -167,12 +168,14 @@ def main():
         or not cache[vid].get("publishedAt")
     ]
 
+    missing = missing[:MAX_NEW_LOOKUPS_PER_RUN]
+
     print(
         f"Selected videos: {len(ids)}",
         flush=True,
     )
     print(
-        f"Already cached: {len(ids) - len(missing)}",
+        f"Already cached: {sum(isinstance(cache.get(vid), dict) and bool(cache[vid].get('publishedAt')) for vid in ids)}",
         flush=True,
     )
     print(
